@@ -14,7 +14,11 @@
 
 package protocol
 
-import "strings"
+import (
+	"errors"
+	"strconv"
+	"strings"
+)
 
 const (
 	statusReply    = 1
@@ -24,31 +28,63 @@ const (
 	multiBulkReply = 5
 )
 
-func ParseRedisProtocol(response string) interface{} {
+func ParseRedisProtocol(response string) Response {
 	respArr := strings.Split(response, "\r\n")
-	for _, resp := range respArr {
-		responseType := getResponseType(resp)
-		switch responseType {
-		case statusReply:
-
+	resultStr := respArr[0]
+	replyType := getResponseType(resultStr[0:1])
+	result := &RespString{}
+	switch replyType {
+	case statusReply:
+		result.Result = resultStr[1:]
+	case errorReply:
+		result.err = errors.New(resultStr[1:])
+	case intReply:
+		resultInt := &RespInt{}
+		num, err := strconv.Atoi(resultStr[1:])
+		if err != nil {
+			resultInt.err = err
 		}
+		resultInt.Result = num
+		return resultInt
+	case bulkReply:
+		result := &RespString{}
+		result.Result = respArr[1]
+		return result
+	case multiBulkReply:
+		length, err := strconv.Atoi(resultStr[1:])
+		if err != nil {
+			return &Resp{err}
+		}
+		resultSlice := &RespStringSlice{Resp{nil}, make([]string, 0, length)}
+		for index, value := range respArr {
+			if (index % 2) == 0 && index != 0 && value != "" {
+				resultSlice.Result = append(resultSlice.Result, value)
+			}
+		}
+		if len(resultSlice.Result) != length {
+			return &Resp{errors.New("Not fill full field ")}
+		}
+		return resultSlice
+	default:
+		result.err = errors.New("Error reply type ")
+
 	}
-	return nil
+	return result
 }
 
-func getResponseType(resp string) int {
-	respType := resp[0:1]
-	switch respType {
+func getResponseType(t string) int {
+	var replyType int
+	switch t {
 	case "+":
-		return statusReply
+		replyType = statusReply
 	case "-":
-		return errorReply
+		replyType = errorReply
 	case ":":
-		return intReply
+		replyType = intReply
 	case "$":
-		return bulkReply
+		replyType = bulkReply
 	case "*":
-		return multiBulkReply
+		replyType = multiBulkReply
 	}
-	return 0
+	return replyType
 }
