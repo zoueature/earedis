@@ -17,6 +17,7 @@ package conn
 import (
 	"errors"
 	"github.com/zoueature/eapool"
+	"io"
 	"net"
 	"strconv"
 	"time"
@@ -36,13 +37,16 @@ type ConnectOption struct {
 	Timeout  time.Duration
 }
 
-func Connect(options *ConnectOption) *EaRedis {
-	redisCons, _ := eapool.NewTCPPool(eapool.PoolArg{Max: options.MaxConn, Idle: options.IdleConn}, func() (conn net.Conn, e error) {
-		conn, e = net.DialTimeout("tcp", options.Host+":"+options.Port, options.Timeout*time.Second)
+func Connect(options *ConnectOption) (*EaRedis, error) {
+	redisCons, err := eapool.NewTCPPool(eapool.PoolArg{Max: options.MaxConn, Idle: options.IdleConn}, func() (conn net.Conn, e error) {
+		conn, e = net.DialTimeout("tcp", options.Host+":"+options.Port, options.Timeout*time.Millisecond)
 		return
 	})
+	if err != nil {
+		return nil, err
+	}
 	connect := &EaRedis{redisCons, options.MaxConn, options.IdleConn}
-	return connect
+	return connect, nil
 }
 
 func (er *EaRedis) SetIdleConn(idleConnNum int) {
@@ -55,11 +59,12 @@ func (er *EaRedis) SetMaxConn(maxConnNum int) {
 	er.conn.SetMaxConn(maxConnNum)
 }
 
-func (er *EaRedis) Command(command string, parameters ...string) (interface{}, error) {
+func (er *EaRedis) Command(command string, parameters ...string) (string, error) {
 	conn, err := er.conn.GetConn(false)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
+	defer conn.Close()
 	commandLen := len(command)
 	allParaNum := len(parameters) + 1
 	sendStr := "*" + strconv.Itoa(allParaNum) + "\r\n" + "$" + strconv.Itoa(commandLen) + "\r\n" + command + "\r\n"
@@ -69,13 +74,21 @@ func (er *EaRedis) Command(command string, parameters ...string) (interface{}, e
 	}
 	size, err := conn.Conn.Write([]byte(sendStr))
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	if size != len(sendStr) {
-		return nil, errors.New("Send part of command string , all " + strconv.Itoa(len(sendStr)) + ", sent: " + strconv.Itoa(size))
+		return "", errors.New("Send part of command string , all " + strconv.Itoa(len(sendStr)) + ", sent: " + strconv.Itoa(size))
 	}
-
-	var response []byte
-	_, _ = conn.Conn.Read(response)
-	return response, nil
+	response := make([]byte, 0)
+	length := 0
+	for {
+		tmp := make([]byte, 64)
+		size, err = conn.Conn.Read(tmp)
+		response = append(response, tmp...)
+		length += size
+		if err == io.EOF || size < 64 {
+			break
+		}
+	}
+	return string(response[0:length]), nil
 }

@@ -9,7 +9,12 @@
 
 package conn
 
-import "testing"
+import (
+	"fmt"
+	"github.com/zoueature/earedis/protocol"
+	"log"
+	"testing"
+)
 
 func TestConnect(t *testing.T) {
 	connOpt := ConnectOption{
@@ -17,7 +22,13 @@ func TestConnect(t *testing.T) {
 		"6379",
 		16,
 		4,
-		0.5,
+		500,
 	}
-	_ := Connect(&connOpt)
+	conn, err := Connect(&connOpt)
+	if err != nil {
+		log.Fatalln(err.Error())
+	}
+	response, err := conn.Command("hgetall", "hash")
+	result := protocol.ParseRedisProtocol(response)
+	fmt.Println(result.Error(), result.GetResult())
 }
