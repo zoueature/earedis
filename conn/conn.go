@@ -23,8 +23,8 @@ import (
 	"time"
 )
 
-type EaRedis struct {
-	conn     *eapool.TcpPool
+type EaConn struct {
+	Conn     *eapool.TcpPool
 	maxConn  int
 	idleConn int
 }
@@ -37,7 +37,7 @@ type ConnectOption struct {
 	Timeout  time.Duration
 }
 
-func Connect(options *ConnectOption) (*EaRedis, error) {
+func Connect(options *ConnectOption) (*EaConn, error) {
 	redisCons, err := eapool.NewTCPPool(eapool.PoolArg{Max: options.MaxConn, Idle: options.IdleConn}, func() (conn net.Conn, e error) {
 		conn, e = net.DialTimeout("tcp", options.Host+":"+options.Port, options.Timeout*time.Millisecond)
 		return
@@ -45,22 +45,22 @@ func Connect(options *ConnectOption) (*EaRedis, error) {
 	if err != nil {
 		return nil, err
 	}
-	connect := &EaRedis{redisCons, options.MaxConn, options.IdleConn}
+	connect := &EaConn{redisCons, options.MaxConn, options.IdleConn}
 	return connect, nil
 }
 
-func (er *EaRedis) SetIdleConn(idleConnNum int) {
+func (er *EaConn) SetIdleConn(idleConnNum int) {
 	er.idleConn = idleConnNum
-	er.conn.SetIdleConn(idleConnNum)
+	er.Conn.SetIdleConn(idleConnNum)
 }
 
-func (er *EaRedis) SetMaxConn(maxConnNum int) {
+func (er *EaConn) SetMaxConn(maxConnNum int) {
 	er.maxConn = maxConnNum
-	er.conn.SetMaxConn(maxConnNum)
+	er.Conn.SetMaxConn(maxConnNum)
 }
 
-func (er *EaRedis) Command(command string, parameters ...string) (string, error) {
-	conn, err := er.conn.GetConn(false)
+func (er *EaConn) Command(command string, parameters ...string) (string, error) {
+	conn, err := er.Conn.GetConn(false)
 	if err != nil {
 		return "", err
 	}

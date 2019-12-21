@@ -57,7 +57,7 @@ func ParseRedisProtocol(response string) Response {
 		}
 		resultSlice := &RespStringSlice{Resp{nil}, make([]string, 0, length)}
 		for index, value := range respArr {
-			if (index % 2) == 0 && index != 0 && value != "" {
+			if (index%2) == 0 && index != 0 && value != "" {
 				resultSlice.Result = append(resultSlice.Result, value)
 			}
 		}
