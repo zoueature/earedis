@@ -12,6 +12,7 @@ package earedis
 import (
 	"errors"
 	"github.com/zoueature/earedis/protocol"
+	"strconv"
 	"strings"
 )
 
@@ -164,9 +165,19 @@ type StringResult struct {
 	response string //redis response
 }
 
+type StringMapResult struct {
+	Result
+	response map[string]string
+}
+
 type IntResult struct {
 	Result
 	response int //redis response
+}
+
+type FloatResult struct {
+	Result
+	response float64
 }
 
 func commandLog(parameters ...string) string {
@@ -193,18 +204,23 @@ func (result *StringResult) Value() string {
 	return result.response
 }
 
-func (result *StringResult) parseProtocol(str string) {
+func (result *StringResult) parseProtocol(str string, succIdentify string) {
 	response := protocol.ParseRedisProtocol(str)
 	if response.Error() != nil {
 		result.err = response.Error()
+		result.result = false
 		return
 	}
 	responseStr, ok := response.GetResult().(string)
 	if !ok {
 		result.err = errors.New("Error response type ")
+		result.result = false
 		return
 	}
 	result.response = responseStr
+	if (succIdentify != "" && responseStr == succIdentify) || succIdentify == "" {
+		result.result = true
+	}
 }
 
 // ------------ integer result method --------------
@@ -216,12 +232,72 @@ func (result *IntResult) parseProtocol(str string) {
 	response := protocol.ParseRedisProtocol(str)
 	if response.Error() != nil {
 		result.err = response.Error()
+		result.result = false
 		return
 	}
 	responseInt, ok := response.GetResult().(int)
 	if !ok {
 		result.err = errors.New("Error response type ")
+		result.result = false
 		return
 	}
 	result.response = responseInt
+}
+
+// ------------ float result method ------------
+func (result *FloatResult) Value() float64 {
+	return result.response
+}
+
+func (result *FloatResult) parseProtocol(str string) {
+	response := protocol.ParseRedisProtocol(str)
+	if response.Error() != nil {
+		result.err = response.Error()
+		result.result = false
+		return
+	}
+	responseStr, ok := response.GetResult().(string)
+	if !ok {
+		result.err = errors.New("Error response type ")
+		result.result = false
+		return
+	}
+	responseFloat, err := strconv.ParseFloat(responseStr, 64)
+	if err != nil {
+		result.err = err
+		result.result = false
+		return
+	}
+	result.response = responseFloat
+}
+
+// ------------- string map result method -------------
+
+func (result *StringMapResult) Value() map[string]string {
+	return result.response
+}
+
+func (result *StringMapResult) parseProtocol(str string, keys []string) {
+	response := protocol.ParseRedisProtocol(str)
+	if response.Error() != nil {
+		result.err = response.Error()
+		result.result = false
+		return
+	}
+	responseStrSlice, ok := response.GetResult().([]string)
+	if !ok {
+		result.err = errors.New("Error response type ")
+		result.result = false
+		return
+	}
+	result.response = make(map[string]string)
+	for index, key := range keys {
+		var value string
+		if index >= len(responseStrSlice) {
+			continue
+		} else {
+			value = responseStrSlice[index]
+		}
+		result.response[key] = value
+	}
 }

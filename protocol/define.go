@@ -12,10 +12,12 @@ package protocol
 type Response interface {
 	Error() error
 	GetResult() interface{}
+	ReplyType() int
 }
 
 type Resp struct {
 	err error
+	replyType int
 }
 
 func (resp *Resp) GetResult() interface{} {
@@ -48,6 +50,10 @@ type RespMapString struct {
 
 func (resp *Resp) Error() error {
 	return resp.err
+}
+
+func (resp *Resp) ReplyType() int {
+	return resp.replyType
 }
 
 func (resp *RespInt) GetResult() interface{} {
